@@ -36,21 +36,22 @@ paths.dist = path.normalize(path.join(__dirname, argv.output));
 if (!fs.existsSync(paths.dist)) {
     fs.mkdirSync(paths.dist);
 }
-
 const readDir = (base, level) => {
+    const arr = [];
     const files = fs.readdirSync(base);
     files.forEach(item => {
         let localBase = path.join(base, item);
         let state = fs.statSync(localBase);
         if (state.isDirectory()) {
-            readDir(localBase, level + 1);
+            readDir(localBase);
         } else {
-            const fileName = path.basename(localBase);
-
-            fs.link(localBase, path.join(paths.dist, fileName), err => {
-                if (err) {
-                    console.log(err.message);
-                    return;
+            const fileName = path.basename(localBase).toLowerCase();
+            arr.push(fileName[0]);
+            arr.forEach(element => {
+                const place = path.join(paths.dist, element);
+                if (!fs.existsSync(place, exists => exists)) {
+                    fs.mkdirSync(place);
+                    fs.linkSync(localBase, path.join(place, fileName));
                 }
             });
         }
