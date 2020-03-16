@@ -3,16 +3,16 @@ const path = require("path");
 const fs = require("fs");
 const del = require("del");
 const util = require("util");
-
-const paths = { source: null, dist: null };
-
+const exists = util.promisify(fs.exists);
+const readdir = util.promisify(fs.readdir);
+const stat = util.promisify(fs.stat);
 const argv = yargs
     .usage("Usage: $0 [option]")
     .help("help")
     .alias("help", "h")
     .version("0.0.1")
     .alias("version", "v")
-    .example("$0 --entry ./filesSort --output ./dist -D => Sortings folder")
+    .example("$0 --entry ./filesSort --output ./dist -D y/n => Sortings folder")
     .option("entry", {
         alias: "e",
         describe: "Путь к читаемой директории",
@@ -26,36 +26,81 @@ const argv = yargs
     .option("delete", {
         alias: "D",
         describe: "Удалять ли ?",
-        default: false
+        default: "n"
     })
     .epilog("homework 1").argv;
 
-paths.source = path.normalize(path.join(__dirname, argv.entry));
-paths.dist = path.normalize(path.join(__dirname, argv.output));
+const source = path.normalize(path.join(__dirname, argv.entry));
+const dist = path.normalize(path.join(__dirname, argv.output));
+const deleteSource = argv.delete;
 
-if (!fs.existsSync(paths.dist)) {
-    fs.mkdirSync(paths.dist);
-}
-const readDir = (base, level) => {
-    const arr = [];
-    const files = fs.readdirSync(base);
-    files.forEach(item => {
-        let localBase = path.join(base, item);
-        let state = fs.statSync(localBase);
-        if (state.isDirectory()) {
-            readDir(localBase);
-        } else {
-            const fileName = path.basename(localBase).toLowerCase();
-            arr.push(fileName[0]);
-            arr.forEach(element => {
-                const place = path.join(paths.dist, element);
-                if (!fs.existsSync(place, exists => exists)) {
-                    fs.mkdirSync(place);
-                    fs.linkSync(localBase, path.join(place, fileName));
-                }
-            });
-        }
-    });
-};
+(async () => {
+    const files = [];
+    if (!(await exists(dist))) {
+        fs.mkdir(dist, err => {
+            if (err) {
+                return;
+            }
+        });
+    }
+    async function recursiveReading(url) {
+        const file = await readdir(url);
+        file.forEach(async item => {
+            const localUrl = path.join(url, item);
+            const state = await stat(localUrl);
 
-readDir(paths.source, 0);
+            if (state.isDirectory()) {
+                recursiveReading(localUrl);
+            } else {
+                files.push({
+                    fileName: path.basename(localUrl),
+                    url: localUrl,
+                    directory: path.basename(localUrl)[0].toUpperCase()
+                });
+            }
+        });
+        sortArray(files);
+    }
+
+    function sortArray(arr) {
+        arr.sort((a, b) => {
+            if (a.directory < b.directory) return -1;
+            if (a.directory > b.directory) return 1;
+            return 0;
+        });
+        createFolder(arr);
+    }
+
+    function createFolder(arr) {
+        arr.forEach(async item => {
+            const fileName = item.fileName;
+            const fileUrl = item.url;
+            const directory = path.join(dist, item.directory);
+            if (!(await exists(directory))) {
+                fs.mkdir(directory, err => {
+                    if (err) {
+                        return;
+                    }
+                });
+            }
+            sortFile(fileName, fileUrl, directory);
+        });
+    }
+
+    function sortFile(fileName, fileUrl, directory) {
+        const newPath = path.join(directory, fileName);
+        fs.link(fileUrl, newPath, err => {
+            if (err) {
+                console.log(err.message);
+                return;
+            }
+        });
+    }
+
+    recursiveReading(source);
+
+    if (deleteSource === "y") {
+        const deletedPath = await del([`${source}`]);
+        console.log(deletedPath);
+    }
+})();
