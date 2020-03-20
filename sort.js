@@ -31,16 +31,14 @@ const source = path.normalize(path.join(__dirname, argv.entry));
 const dist = path.normalize(path.join(__dirname, argv.output));
 const deleteSource = argv.delete;
 
-fs.exists(dist, data => {
-    if (!data) {
-        fs.mkdir(dist, err => {
-            if (err) {
-                console.log(err.message);
-                return;
-            }
-        });
-    }
-});
+if (!fs.existsSync(dist)) {
+    fs.mkdir(dist, err => {
+        if (err) {
+            console.log(err.message);
+            return;
+        }
+    });
+}
 
 function fileSort(url) {
     const file = fs.readdir(url, (err, files) => {
@@ -64,21 +62,21 @@ function fileSort(url) {
                         dist,
                         fileName[0].toUpperCase()
                     );
-                    fs.exists(directory, data => {
-                        if (!data) {
-                            fs.mkdir(directory, err => {
-                                if (err) {
-                                    console.log(err.message);
-                                    return;
-                                }
-                                const newPath = path.join(directory, fileName);
-                                fs.link(currentUrl, newPath, err => {
-                                    if (err) {
-                                        console.log(err.message);
-                                        return;
-                                    }
-                                });
-                            });
+                    const newPath = path.join(directory, fileName);
+
+                    if (!fs.existsSync(directory)) {
+                        fs.mkdir(directory, err => {
+                            if (err) {
+                                console.log(err.message);
+                                return;
+                            }
+                        });
+                    }
+
+                    fs.link(currentUrl, newPath, err => {
+                        if (err) {
+                            console.log(err.message);
+                            return;
                         }
                     });
                 }
