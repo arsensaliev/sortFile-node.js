@@ -3,16 +3,13 @@ const path = require("path");
 const fs = require("fs");
 const del = require("del");
 const util = require("util");
-
-const paths = { source: null, dist: null };
-
 const argv = yargs
     .usage("Usage: $0 [option]")
     .help("help")
     .alias("help", "h")
     .version("0.0.1")
     .alias("version", "v")
-    .example("$0 --entry ./filesSort --output ./dist -D => Sortings folder")
+    .example("$0 --entry ./filesSort --output ./dist -D y/n => Sortings folder")
     .option("entry", {
         alias: "e",
         describe: "Путь к читаемой директории",
@@ -26,35 +23,73 @@ const argv = yargs
     .option("delete", {
         alias: "D",
         describe: "Удалять ли ?",
-        default: false
+        default: "n"
     })
     .epilog("homework 1").argv;
 
-paths.source = path.normalize(path.join(__dirname, argv.entry));
-paths.dist = path.normalize(path.join(__dirname, argv.output));
+const source = path.normalize(path.join(__dirname, argv.entry));
+const dist = path.normalize(path.join(__dirname, argv.output));
+const deleteSource = argv.delete;
 
-if (!fs.existsSync(paths.dist)) {
-    fs.mkdirSync(paths.dist);
+if (!fs.existsSync(dist)) {
+    fs.mkdir(dist, err => {
+        if (err) {
+            console.log(err.message);
+            return;
+        }
+    });
 }
 
-const readDir = (base, level) => {
-    const files = fs.readdirSync(base);
-    files.forEach(item => {
-        let localBase = path.join(base, item);
-        let state = fs.statSync(localBase);
-        if (state.isDirectory()) {
-            readDir(localBase, level + 1);
-        } else {
-            const fileName = path.basename(localBase);
-
-            fs.link(localBase, path.join(paths.dist, fileName), err => {
+function fileSort(url) {
+    const file = fs.readdir(url, (err, files) => {
+        if (err) {
+            console.log(err.message);
+            return;
+        }
+        files.forEach(item => {
+            const currentUrl = path.join(url, item);
+            fs.stat(currentUrl, (err, state) => {
                 if (err) {
                     console.log(err.message);
                     return;
                 }
-            });
-        }
-    });
-};
 
-readDir(paths.source, 0);
+                if (state.isDirectory()) {
+                    fileSort(currentUrl);
+                } else {
+                    const fileName = path.basename(currentUrl);
+                    const directory = path.join(
+                        dist,
+                        fileName[0].toUpperCase()
+                    );
+                    const newPath = path.join(directory, fileName);
+
+                    if (!fs.existsSync(directory)) {
+                        fs.mkdir(directory, err => {
+                            if (err) {
+                                console.log(err.message);
+                                return;
+                            }
+                        });
+                    }
+
+                    fs.link(currentUrl, newPath, err => {
+                        if (err) {
+                            console.log(err.message);
+                            return;
+                        }
+                    });
+                }
+            });
+        });
+    });
+}
+
+fileSort(source);
+
+if (deleteSource === "y") {
+    const deletedPath = del([`${source}`]);
+    deletedPath
+        .then(data => console.log(data))
+        .catch(error => console.log(error));
+}
